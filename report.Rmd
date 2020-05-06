@@ -1,0 +1,312 @@
+---
+title: Why Yield Matters
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+########################################
+######## INITIALIZING WORKSPACE ########
+########################################
+
+library(dplyr)  
+library(tidyr)  
+library(ggplot2)
+library(knitr)
+library(xtable)
+library(kableExtra)
+
+temp_increase <- 0.01
+
+
+##############################
+######## LOADING DATA ########
+##############################
+
+master_data <- read.csv("master_data.csv", stringsAsFactors = FALSE)
+
+
+
+###############################
+######## MODELING DATA ########
+###############################
+
+## Fitting final model to data  
+
+master_data %>%
+  glm(formula = ENROLLED ~ poly(APSS_SCORE, 3) + as.factor(ENTRY_YEAR),
+      family  = "binomial") -> temp_glm_enroll
+
+master_data %>%
+  filter(ENROLLED == 1) %>%
+  glm(formula = RETAINED ~ poly(APSS_SCORE, 1) + as.factor(ENTRY_YEAR),
+      family  = "binomial") -> temp_glm_retain
+  
+
+## Using models to get predictions for data
+
+master_data %>%
+  mutate(PRED_ENROLL = predict(object  = temp_glm_enroll, 
+                               newdata = ., 
+                               type    = "response"),
+         PRED_RETAIN = predict(object  = temp_glm_retain, 
+                               newdata = ., 
+                               type    = "response")) -> master_data
+  
+  
+rm(temp_glm_enroll, temp_glm_retain)
+
+
+
+
+#################################
+######## SIMULATING DATA ########
+#################################
+
+## Creating the new admit cutoff
+
+master_data %>%
+  arrange(ENTRY_YEAR,
+          desc(APSS_SCORE)) %>%
+  group_by(ENTRY_YEAR) %>%
+  mutate(NEW_ADMIT = ifelse(cumsum(PRED_ENROLL + temp_increase) <= sum(ENROLLED), 1, 0)) %>%
+  ungroup()  -> master_data
+
+
+
+## Running 5,000 simulations of enrollment based on new admit criteria
+
+new_class_stats <- data.frame()
+
+
+for (i in 1:500) {
+
+  ## Simiulating the new class
+  
+  master_data %>%
+    mutate(temp_enroll = runif(n = nrow(.))) %>%
+    filter(NEW_ADMIT    == 1,
+          PRED_ENROLL + temp_increase > temp_enroll) -> temp_data
+  
+  
+  ## Summarizing stats for the new class
+  
+  temp_data %>%
+    group_by(ENTRY_YEAR) %>%
+    summarise(Interation = i,
+              COUNT      = n(),
+              APSS_SCORE = mean(APSS_SCORE),
+              HS_GPA     = mean(HS_GPA, na.rm = TRUE),
+              RETAIN     = mean(PRED_RETAIN)
+              ) -> temp_new_class_stats
+  
+  
+  ## Writing data 
+  
+  new_class_stats <- rbind(new_class_stats, temp_new_class_stats)
+  
+  rm(temp_data, temp_new_class_stats)
+  if(i %% 500 == 0) {gc()}
+
+}
+rm(i)
+
+
+#############################
+######## DATA TABLES ########
+#############################
+
+## Yield over time
+
+master_data %>%
+  group_by(ENTRY_YEAR) %>%
+  summarise(YIELD = mean(ENROLLED)) -> table_1
+
+
+## Class size with increased yield
+
+master_data %>%
+  group_by(ENTRY_YEAR) %>%
+  summarise(OLD_ENROLL = sum(ENROLLED),
+            NEW_ENROLL = round(sum(PRED_ENROLL+temp_increase), 0),
+            DIFF       = NEW_ENROLL - OLD_ENROLL) %>%
+  ungroup() -> table_2
+
+
+
+## Old Class Stats vs New Class Stats
+
+master_data %>%
+  group_by(ENTRY_YEAR) %>%
+  summarise(APSS_SCORE = mean(APSS_SCORE),
+            HS_GPA     = mean(HS_GPA)) %>%
+  ungroup() -> temp_old_stats
+
+new_class_stats %>%
+  group_by(ENTRY_YEAR) %>%
+  summarise(APSS_SCORE = mean(APSS_SCORE),
+            HS_GPA     = mean(HS_GPA)) %>%
+  ungroup() -> temp_new_stats
+
+
+
+####################################
+######## DATA VISUALIZATION ########
+####################################
+
+## APSS vs Enrolling
+
+master_data %>%
+  ggplot() +
+    stat_smooth(aes(x = APSS_SCORE,
+                    y = ENROLLED),
+                method      = "glm",
+                formula = y ~ poly(x, 3)) +
+    geom_histogram(aes(x = APSS_SCORE,
+                       y = ..count../sum(..count..)/.5),
+                   binwidth = 1,
+                   fill     = "grey30") +
+    scale_x_continuous(name = "APSS Score") +
+    scale_y_continuous(name   = "Likelihood of Enrolling",
+                       labels = scales::percent) +
+    theme(axis.ticks = element_blank(),
+          axis.title = element_text(size = 18),
+          axis.text  = element_text(size = 14)) -> plot_1
+
+
+
+## Normal Yield: APSS vs Retain
+
+master_data %>%
+  filter(ENROLLED == 1) %>%
+  ggplot() +
+    stat_smooth(aes(x = APSS_SCORE,
+                    y = RETAINED),
+                method      = "glm",
+                formula = y ~ poly(x, 1)) +
+    geom_histogram(aes(x = APSS_SCORE,
+                       y = ..count../sum(..count..)/.1),
+                   binwidth = 1,
+                   fill     = "grey30") +
+    scale_x_continuous(name = "APSS Score") +
+    scale_y_continuous(name   = "Likelihood of Retaining",
+                       labels = scales::percent) +
+    theme(axis.ticks = element_blank(),
+          axis.title = element_text(size = 18),
+          axis.text  = element_text(size = 14)) -> plot_2
+
+
+
+## Hypothetical Increased Yield: APSS vs YIELD
+
+master_data %>%
+  ggplot() +
+    stat_smooth(aes(x = APSS_SCORE,
+                    y = ENROLLED),
+                method  = "glm",
+                formula = y ~ poly(x, 3),
+                se      = FALSE,
+                linetype = 3) +
+    stat_smooth(aes(x = APSS_SCORE,
+                    y = ENROLLED),
+                method  = "glm",
+                formula = y + 0.01 ~ poly(x, 3)) +
+    geom_histogram(aes(x    = APSS_SCORE,
+                       y    = ..count../sum(..count..)/.5,
+                       fill = as.factor(-NEW_ADMIT)),
+                   binwidth = 1) +
+    scale_x_continuous(name = "APSS Score") +
+    scale_y_continuous(name   = "Likelihood of Enrolling",
+                       labels = scales::percent) +
+    scale_fill_manual(values = c("grey30", "firebrick2")) +
+    theme(axis.ticks      = element_blank(),
+          legend.position = "none",
+          axis.title      = element_text(size = 18),
+          axis.text       = element_text(size = 14)) -> plot_3
+
+
+
+```
+
+
+<div class = "container-fluid">
+
+
+<div class = "row">
+### Introduction
+
+Over the past five years at Eckerd College, `r scales::percent(mean(master_data$ENROLLED), 0.1)` of admitted FTIC students have enrolled at the college. However, the percentage of students who enrolled (i.e. yield) has ranged `r scales::percent(min(table_1$YIELD), 0.1)` to `r scales::percent(max(table_1$YIELD), 0.1)` from during this same time period. Flucations in yield can have important consequences for the makeup of the incoming class and enrollment managenemt. 
+
+Here, we examine the effect of yield by similuating a `r scales::percent(temp_increase)` increase in yield. 
+</div>
+
+
+<div class = "row">
+### APSS Scores
+
+```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+
+plot_1
+
+
+```
+
+APSS scores are a composite score based on prospective students' high school GPA and standardized test scores. These scores range from 0 to 100 and they are used by the college to make decisions regarding admission and financial aid.
+
+High acheiving students are highly sought after by colleges. 
+
+
+</div>
+
+
+<div class = "row">
+```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+
+## APSS Points vs Retention
+
+plot_2
+
+```
+
+And, as you might expect, students with higher APSS scores are more likely to be retained through the start of their second year. 
+</div>
+
+
+
+<div class = "row">
+### Effect of Increased Yield
+
+
+``` {r echo = FALSE}
+
+table_2 %>%
+  kable(col.names = c('Entry Year', 'Old Enrollment', 'New Enrollment', 'Difference'),
+        align     = 'lccc',
+        format    = "html", 
+        booktabs = T,
+        table.attr = "style='width:40%;'") %>%
+  kable_styling(position = "right") 
+
+
+```
+
+
+```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+
+
+plot_3
+
+
+```
+
+
+More text goes here...
+
+</div>
+
+
+
+
+
+</div>
