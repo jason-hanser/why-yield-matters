@@ -4,6 +4,7 @@ output: html_document
 ---
 
 
+
 ```{r setup, include=FALSE}
 
 ########################################
@@ -80,7 +81,7 @@ master_data %>%
 new_class_stats <- data.frame()
 
 
-for (i in 1:500) {
+for (i in 1:50) {
 
   ## Simiulating the new class
   
@@ -164,15 +165,18 @@ master_data %>%
                 method      = "glm",
                 formula = y ~ poly(x, 3)) +
     geom_histogram(aes(x = APSS_SCORE,
-                       y = ..count../sum(..count..)/.5),
+                       y = ..count../sum(..count..)/.3),
                    binwidth = 1,
                    fill     = "grey30") +
-    scale_x_continuous(name = "APSS Score") +
+    scale_x_continuous(name = "Admissions Score") +
     scale_y_continuous(name   = "Likelihood of Enrolling",
                        labels = scales::percent) +
+    labs(caption = "Figure 1: ") +
     theme(axis.ticks = element_blank(),
           axis.title = element_text(size = 18),
-          axis.text  = element_text(size = 14)) -> plot_1
+          axis.text  = element_text(size = 14),
+          plot.caption    = element_text(size = 15,
+                                         hjust = 0)) -> plot_1
 
 
 
@@ -189,12 +193,15 @@ master_data %>%
                        y = ..count../sum(..count..)/.1),
                    binwidth = 1,
                    fill     = "grey30") +
-    scale_x_continuous(name = "APSS Score") +
+    scale_x_continuous(name = "Admissions Score") +
     scale_y_continuous(name   = "Likelihood of Retaining",
                        labels = scales::percent) +
+    labs(caption = "Figure 2: ") +
     theme(axis.ticks = element_blank(),
           axis.title = element_text(size = 18),
-          axis.text  = element_text(size = 14)) -> plot_2
+          axis.text  = element_text(size = 14),
+          plot.caption    = element_text(size = 15,
+                                         hjust = 0)) -> plot_2
 
 
 
@@ -213,55 +220,62 @@ master_data %>%
                 method  = "glm",
                 formula = y + 0.01 ~ poly(x, 3)) +
     geom_histogram(aes(x    = APSS_SCORE,
-                       y    = ..count../sum(..count..)/.5,
+                       y    = ..count../sum(..count..)/.3,
                        fill = as.factor(-NEW_ADMIT)),
                    binwidth = 1) +
-    scale_x_continuous(name = "APSS Score") +
+    scale_x_continuous(name = "Admissions Score") +
     scale_y_continuous(name   = "Likelihood of Enrolling",
                        labels = scales::percent) +
     scale_fill_manual(values = c("grey30", "firebrick2")) +
+    labs(caption = strwrap("Figure 3: Effect of increased yield. The red shaded area represents students who could be denied admission without affect overall enrollment if yield increased")) +
     theme(axis.ticks      = element_blank(),
           legend.position = "none",
           axis.title      = element_text(size = 18),
-          axis.text       = element_text(size = 14)) -> plot_3
-
+          axis.text       = element_text(size = 14),
+          plot.caption    = element_text(size = 15,
+                                         hjust = 0)) -> plot_3
 
 
 ```
 
-
-<div class = "container-fluid">
-
+<div class = "container">
 
 <div class = "row">
+
 ### Introduction
 
-Over the past five years at Eckerd College, `r scales::percent(mean(master_data$ENROLLED), 0.1)` of admitted FTIC students have enrolled at the college. However, the percentage of students who enrolled (i.e. yield) has ranged `r scales::percent(min(table_1$YIELD), 0.1)` to `r scales::percent(max(table_1$YIELD), 0.1)` from during this same time period. Flucations in yield can have important consequences for the makeup of the incoming class and enrollment managenemt. 
 
-Here, we examine the effect of yield by similuating a `r scales::percent(temp_increase)` increase in yield. 
+At many colleges and universities, faculty are required to assist with undergraduate recruitment. And, this is particulary true at small, tuition-dependant institutions like Eckerd College where faculty often meet individually with prospective students/parents and participate in events organized by the college's admissions office - such as open houses and discussion panels. These obligations can be time consuming and substantially add to the workload of the faculty who are already busy teaching and mentoring students. So most faculty understand the importance of recruitment as it relates to the financial health of the institution, it's not surprising that faculty are sometimes frustrated by these added responsibilities.
+
+Here, we demonstrate the importance of recruitment as it relates to admissions and enrollment management by simulating a `r scales::percent(temp_increase)` increase in yield. 
+
+
 </div>
 
 
 <div class = "row">
-### APSS Scores
+### Applicant Quality, Yield, and Retention
 
-```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+```{r echo = FALSE, out.width = "50%", out.extra = 'style="float:right; padding:25px"'}
 
 plot_1
 
 
 ```
 
-APSS scores are a composite score based on prospective students' high school GPA and standardized test scores. These scores range from 0 to 100 and they are used by the college to make decisions regarding admission and financial aid.
 
-High acheiving students are highly sought after by colleges. 
+Each applicant is scored by the admissions office on a 0 to 100 scale. This score is based on the student's high school GPA and standardized test scores and meant to reflect the overall quality of the applicant. Whlie not the only factor considered, decisions regarding admission and financial aid are heavily based on these scores.
+
+Yield varies as a function of applicant quality (Figure 1). In order to encourage high achieving students to enroll, Eckerd College awards more merit-based aid to studunts with high admissions scores. Still, competition for these students is stiff, since all colleges and universities compete against each other to attract the best students. As a result, students with strong GPAs and test scores have many options. 
 
 
 </div>
 
 
 <div class = "row">
-```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+
+
+```{r echo = FALSE, out.width = "50%", out.extra = 'style="float:right; padding:25px"'}
 
 ## APSS Points vs Retention
 
@@ -269,43 +283,33 @@ plot_2
 
 ```
 
-And, as you might expect, students with higher APSS scores are more likely to be retained through the start of their second year. 
+Simialry, the likelihood that a student is retained through the start of their second year also varies as a function of their admission scores, such that students with higher admissions scores more likely to be retained. 
+
 </div>
 
 
 
 <div class = "row">
+
 ### Effect of Increased Yield
 
-
-``` {r echo = FALSE}
-
-table_2 %>%
-  kable(col.names = c('Entry Year', 'Old Enrollment', 'New Enrollment', 'Difference'),
-        align     = 'lccc',
-        format    = "html", 
-        booktabs = T,
-        table.attr = "style='width:40%;'") %>%
-  kable_styling(position = "right") 
-
-
-```
-
-
-```{r echo = FALSE, out.width = "40%", out.extra = 'style="float:right; padding:10px"'}
+```{r echo = FALSE, out.width = "50%", out.extra = 'style="float:right; padding:25px"'}
 
 
 plot_3
 
 
+
 ```
 
+Natually, if yield increased and the number of admidted students remained the same, the number of student who would enroll would increase - an increase of roughly `r round((sum(master_data$PRED_ENROLL + temp_increase) - sum(master_data$ENROLLED))/length(unique(master_data$ENTRY_YEAR)))` students per year.
 
-More text goes here...
+However, if the college sought to maintain enrollment levels, a `r scales::percent(temp_increase)` increase in yield would mean that school could deny admission to lowest scoring `r scales::percent(mean(master_data$NEW_ADMIT == 0), 0.1)` of admitted students. 
 
 </div>
 
 
+### Conclusion
 
 
 
